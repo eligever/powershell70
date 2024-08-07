@@ -1,0 +1,29 @@
+$baseOUs = "tel aviv", "holon", "hifa"
+$childOUs = "users", "computers", "groups"
+$domain = "DC=kernel,DC=com"
+$defaultPassword = ConvertTo-SecureString "qwer4321!" -AsPlainText -Force
+
+foreach ($baseOU in $baseOUs) {
+    $baseOUName = $baseOU -replace ' ', ''
+    $baseOUPath = "OU=$baseOU,$domain"
+
+    New-ADOrganizationalUnit -Name $baseOU -Path $domain
+    $childOUs | ForEach-Object { New-ADOrganizationalUnit -Name $_ -Path "$baseOUPath" }
+
+    $usersOUPath = "OU=users,$baseOUPath"
+    1..10 | ForEach-Object {
+        $username = "${baseOUName}$_"
+        New-ADUser -Name $username -SamAccountName $username -UserPrincipalName "$username@kernel.com" `
+                   -Path $usersOUPath -AccountPassword $defaultPassword -Enabled $true
+    }
+
+    $groupName = "Group_$baseOUName"
+    $groupsOUPath = "OU=groups,$baseOUPath"
+    New-ADGroup -Name $groupName -GroupScope Global -Path $groupsOUPath
+
+    Get-ADUser -Filter * -SearchBase $usersOUPath | ForEach-Object {
+        Add-ADGroupMember -Identity $groupName -Members $_.SamAccountName
+    }
+}
+
+Write-Host "OUs, users, and groups have been created successfully."
